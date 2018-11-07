@@ -53,7 +53,7 @@ class ModelFactory:
                                module_name="nasnet",
                                last_conv_layer="activation_260"))
 
-        self.name_list = ["VGG16", 
+        self.model_names = ["VGG16", 
                           "VGG19",
                           "DenseNet121",
                           "ResNet50",
@@ -68,45 +68,40 @@ class ModelFactory:
     def get_input_size(self, model_name):
          return self.models_[model_name]["input_shape"][:2]
 
-    def get_model(self,
-                  class_num, 
-                  model_name, 
-                  use_base_weights=True, 
-                  weights_path=None, 
-                  input_shape=None):
-        
-        if use_base_weights is True:
-            base_weights = "imagenet"
-        else:
-            base_weights = None
+    def get_base_model(self, model_name, base_weights, input_shape):
+        assert model_name in self.model_names
+        base_model_class = getattr(importlib.import_module("keras.applications."\
+            + self.models_[model_name]['module_name']), model_name)
+        if input_shape is None: 
+            input_shape = self.models_[model_name]["input_shape"]
+        img_input = Input(shape=input_shape)
+        base_model = base_model_class(include_top=False,
+                                      input_tensor=img_input,
+                                      input_shape=input_shape,
+                                      weights=base_weights)
+        return base_model
 
-        if model_name in self.name_list:
-            base_model_class = getattr(importlib.import_module("keras.applications."\
-                + self.models_[model_name]['module_name']),model_name)
-
-            if input_shape is None:
-                input_shape = self.models_[model_name]["input_shape"]
-            
-            img_input = Input(shape=input_shape)
-            base_model = base_model_class(include_top=False,
-                                          input_tensor=img_input,
-                                          input_shape=input_shape,
-                                          weights=base_weights,
-                                         )
-            x = base_model.output
-            x = GlobalAveragePooling2D()(x)
-            x = Dropout(0.4)(x) # customize dropout ratio
-
-            predictions = Dense(class_num, activation="softmax", name="predictions")(x)
-            # predictions = Flatten()(predictions) # modify based on model architecture                   
-            model = Model(inputs=img_input, outputs=predictions)
-
-        if weights_path is not None:
-            print("load model weights_path: %s" % (weights_path))
-            model.load_weights(weights_path)
-
+    def get_classification_model(self, class_num, model_name,
+        base_weights="imagenet", input_shape=None):
+        base_model = self.get_base_model(model_name, base_weights, input_shape)
+        x = base_model.output
+        x = GlobalAveragePooling2D()(x)
+        x = Dropout(0.4)(x) 
+        predictions = Dense(class_num, activation="sigmoid", name="predictions")(x)
+        model = Model(inputs=img_input, outputs=predictions)
         return model
 
+    def get_regression_model(self, class_num, model_name,
+        base_weights="imagenet", input_shape=None):
+        base_model = self.get_base_model(model_name, base_weights, input_shape)
+        x = base_model.output
+        x = GlobalAveragePooling2D()(x)
+        x = Dropout(0.5)(x) 
+        x = Dense(1024, activation="tanh")
+        x = Dropout(0.25)(x) 
+        predictions = Dense(class_num, activation="linear", name="predictions")(x)
+        model = Model(inputs=img_input, outputs=predictions)
+        return model
 
 
 def LungSegNet(inp_shape, k_size=3):
