@@ -6,6 +6,7 @@ import pandas as pd
 import keras.backend as kb
 from tqdm import tqdm
 from imgaug import augmenters as iaa
+from keras.models import load_model
 from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau, EarlyStopping, CSVLogger
 from keras.callbacks import Callback
 from keras.optimizers import Adam, SGD
@@ -21,44 +22,47 @@ import tool
 class config(object):
     """ classification model configuration """
 
-    CLASS_NUM = 2
-    MODEL_NAME = "InceptionV3"
+    CLASS_NAMES = ["Atelectasis","Cardiomegaly","Effusion","Infiltration","Mass","Nodule",
+                   "Pneumonia","Pneumothorax","Consolidation","Edema","Emphysema","Fibrosis",
+                   "Pleural_Thickening","Hernia"]
+
+    MODEL_NAME = "DenseNet121"
     EPOCH = 100
     BATCH_SIZE = 32
     NET_INPUT_DIM = 256
     LEARNING_RATE = 1e-3
     
-    LOSS = "categorical_crossentropy"
+    LOSS = "binary_crossentropy"
     METRICS = ['acc']
-    INIT_WEIGHT_FP = None
     GENERATOR_WORKERS = 8
     
-    TRAIN_STEPS = 226
-    VAL_STEPS = 9
+    TRAIN_STEPS = 2364
+    VAL_STEPS = 339
 
-    # CSV files will be created under these directories
-    TRAIN_DIR = "C:/Users/hliu/Desktop/patch_cls/train" 
-    VAL_DIR   = "C:/Users/hliu/Desktop/patch_cls/val" 
+    # Either (a) Directory of images (b) CSV filepath
+    #########################################################
+    TRAIN = "C:/Users/hliu/Desktop/SDFN/my_train.csv"
+    VAL = "C:/Users/hliu/Desktop/SDFN/my_dev.csv"
+    #########################################################
 
 
-
-def augmentation(num):
+def augmentation():
     """ Real-time image augmentation """
-    return iaa.SomeOf((0,num),
-                [    
-                iaa.Fliplr(0.5),
-                iaa.Flipud(0.5),
-                iaa.Affine(scale={"x": (0.9, 1.1), "y": (0.9, 1.1)}, 
-                        translate_percent={"x": (-0.01, 0.01), "y": (-0.01, 0.01)}, 
-                        rotate=(-10, 10), 
-                        shear=(-10, 10)),
-                iaa.CropAndPad(percent=(-0.2,0.2)),
-                iaa.Add((-10, 10), per_channel=0.5),
-                iaa.ContrastNormalization((0.8,1.4),per_channel=0.5),
-                iaa.Sharpen(alpha=(0, 1.0), lightness=(0.85, 1.25)),
-                iaa.Multiply((0.9, 1.1), per_channel=0.5),
-                ])
-
+    # return iaa.SomeOf((0, 5),
+    #             [    
+    #             iaa.Fliplr(0.5),
+    #             iaa.Flipud(0.5),
+    #             iaa.Affine(scale={"x": (0.9, 1.1), "y": (0.9, 1.1)}, 
+    #                     translate_percent={"x": (-0.01, 0.01), "y": (-0.01, 0.01)}, 
+    #                     rotate=(-10, 10), 
+    #                     shear=(-10, 10)),
+    #             iaa.CropAndPad(percent=(-0.2,0.2)),
+    #             iaa.Add((-10, 10), per_channel=0.5),
+    #             iaa.ContrastNormalization((0.8,1.4),per_channel=0.5),
+    #             iaa.Sharpen(alpha=(0, 1.0), lightness=(0.85, 1.25)),
+    #             iaa.Multiply((0.9, 1.1), per_channel=0.5),
+    #             ])
+    return iaa.Fliplr(0.5)
 
 
 class MultipleClassAUROC(Callback):
@@ -105,17 +109,15 @@ class MyClassifier(object):
         """ Training classification model
         """
         ###################################################################################
-        augs = augmentation(4) # how many augmentations will be used
+        augs = augmentation() # how many augmentations will be used
         optimizer = SGD(lr=config.LEARNING_RATE, momentum=0.9, decay=1e-5)
-        early_stop = EarlyStopping(monitor="val_loss", min_delta=0, patience=12, verbose=1)
-        reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.1, patience=5,verbose=1)
+        early_stop = EarlyStopping(monitor="val_loss", min_delta=0, patience=9, verbose=1)
+        reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.1, patience=3,verbose=1)
         ###################################################################################
 
-        CLASS_NAMES, TRAIN_CSV_FP = tool.prepare_csv(config.TRAIN_DIR)
-        CLASS_NAMES2, VAL_CSV_FP = tool.prepare_csv(config.VAL_DIR)
-        assert CLASS_NAMES==CLASS_NAMES2, "Error: different classes between training \
-                                            and validation set"
-        CLASS_NUM = len(CLASS_NAMES)
+        TRAIN_CSV_FP, tmp_train = tool.prepare_dataset(config.TRAIN)
+        VAL_CSV_FP,   tmp_val   = tool.prepare_dataset(config.VAL)
+
         SAVE_WEIGHT_FP = os.path.join(log_dir, "{epoch:03d}-{val_loss:.4f}.h5")
         AUC_LOG_FP = os.path.join(log_dir, "auc.txt")
 
@@ -126,7 +128,7 @@ class MyClassifier(object):
         # Training dataset
         train_sequence = AugmentedImageSequence(
             csv_fp=TRAIN_CSV_FP,
-            class_names=CLASS_NAMES,
+            class_names=config.CLASS_NAMES,
             batch_size=config.BATCH_SIZE,
             target_size=(config.NET_INPUT_DIM, config.NET_INPUT_DIM),
             steps=config.TRAIN_STEPS,
@@ -136,7 +138,7 @@ class MyClassifier(object):
         # Validation dataset
         validation_sequence = AugmentedImageSequence(
             csv_fp=VAL_CSV_FP,
-            class_names=CLASS_NAMES,
+            class_names=config.CLASS_NAMES,
             batch_size=config.BATCH_SIZE,
             target_size=(config.NET_INPUT_DIM, config.NET_INPUT_DIM),
             steps=config.VAL_STEPS,
@@ -144,13 +146,11 @@ class MyClassifier(object):
             )
 
         # Load classification model
-        model = ModelFactory().get_model(class_num=CLASS_NUM,
-                                         model_name=config.MODEL_NAME,
-                                         use_base_weights=True, # Initialized with ImageNet
-                                         weights_path=config.INIT_WEIGHT_FP,
-                                         input_shape=(config.NET_INPUT_DIM,config.NET_INPUT_DIM,3))
-        if show_model:
-            print(model.summary())
+        model = ModelFactory().get_classification_model(class_num=len(config.CLASS_NAMES),
+                                                        model_name=config.MODEL_NAME,
+                                                        base_weights="imagenet",
+                                                        input_shape=(config.NET_INPUT_DIM,config.NET_INPUT_DIM,3))
+        if show_model: print(model.summary())
 
         model.compile(optimizer=optimizer, loss=config.LOSS, metrics=config.METRICS)
 
@@ -158,8 +158,8 @@ class MyClassifier(object):
         checkpoint = ModelCheckpoint(SAVE_WEIGHT_FP, save_weights_only=False, save_best_only=False, verbose=0)
         tensorboard = TensorBoard(log_dir=os.path.join(log_dir, "logs"))
         csv_logger = CSVLogger(os.path.join(log_dir, "my_logger.csv"))
-        auroc = MultipleClassAUROC(AUC_LOG_FP, validation_sequence, CLASS_NAMES, config.GENERATOR_WORKERS)
-        callbacks = [checkpoint, tensorboard, csv_logger, early_stop, reduce_lr]
+        auroc = MultipleClassAUROC(AUC_LOG_FP, validation_sequence, config.CLASS_NAMES, config.GENERATOR_WORKERS)
+        callbacks = [checkpoint, tensorboard, csv_logger, early_stop, reduce_lr, auroc]
 
         history = model.fit_generator(
                                     generator=train_sequence,
@@ -173,20 +173,13 @@ class MyClassifier(object):
                                     )
 
         print("\nFinished training")
+        if tmp_train: os.remove(TRAIN_CSV_FP)
+        if tmp_val: os.remove(VAL_CSV_FP)
 
 
-
-    def load_model(self, weight_fp):
-        model_name = config.MODEL_NAME
-        class_num = config.CLASS_NUM
-        model = ModelFactory().get_model(class_num=class_num,
-                                         model_name=model_name,
-                                         use_base_weights=False,
-                                         weights_path=weight_fp,
-                                         input_shape=(config.NET_INPUT_DIM,config.NET_INPUT_DIM,3))
-        print(f"successfully loaded {model_name}")
-        self.model = model
-
+    def load_model(self, model_fp):
+        self.model = load_model(model_fp)
+        print(f"successfully loaded model: {model_fp}")
 
 
     def predict(self, image_fp):  
@@ -196,25 +189,33 @@ class MyClassifier(object):
         '''    
         assert self.model is not None, "Please load model"
         image = tool.read_image(image_fp,3)
-        image = tool.resize_image(image,
-            (config.NET_INPUT_DIM,config.NET_INPUT_DIM))
+        image = tool.resize_image(image,(config.NET_INPUT_DIM,config.NET_INPUT_DIM))
         image = tool.normalize(image)
         batch = np.asarray([image])
         prob = np.squeeze(self.model.predict(batch),0).tolist()
         return prob
 
 
-
-    def write_rsult(self, image_dir, save_fp, threshold=0.5):
+    def write_rsult(self, test_src, save_fp, threshold=0.5):
+        """ Write classification results as a file
+        test_src: either (a) test_dir (b) test_csv_fp
+        """
         assert self.model is not None, "Please load model"
-        image_fps = glob.glob(image_dir+"/*.*")
+        class_names = config.CLASS_NAMES
+        row =",".join(x for x in ["image_fp"]+class_names)+"\n"
+        image_fps = None
+        if os.path.isdir(test_src): image_fps = glob.glob(image_dir+"/*.*")
+        if os.path.isfile(test_src):
+            df_test = pd.read_csv(test_src)
+            pid_column_name = df_test.columns.tolist()[0]
+            image_fps = df_test[pid_column_name].tolist()
         with open(save_fp, 'w') as f:
-            f.write("patientId,Target\n")
+            f.write(row)
             for image_fp in tqdm(image_fps):
-                prob = self.predict(image_fp)[0]
-                target = int(prob > threshold)
-                f.write(tool.get_id(image_fp)+","+str(target)+"\n")
-
+                prob = self.predict(image_fp)
+                target = [round(x, 5) for x in prob]
+                target_str = ",".join(str(x) for x in target)
+                f.write(image_fp+","+target_str+"\n")
 
 
     def compute_acc(self, csv_test, threshold):
