@@ -88,7 +88,7 @@ class ModelFactory:
         x = GlobalAveragePooling2D()(x)
         x = Dropout(0.4)(x) 
         predictions = Dense(class_num, activation="sigmoid", name="predictions")(x)
-        model = Model(inputs=img_input, outputs=predictions)
+        model = Model(inputs=base_model.input, outputs=predictions)
         return model
 
     def get_regression_model(self, class_num, model_name,
@@ -100,7 +100,7 @@ class ModelFactory:
         x = Dense(1024, activation="tanh")(x)
         x = Dropout(0.25)(x) 
         predictions = Dense(class_num, activation="linear", name="predictions")(x)
-        model = Model(inputs=img_input, outputs=predictions)
+        model = Model(inputs=base_model.input, outputs=predictions)
         return model
 
 
