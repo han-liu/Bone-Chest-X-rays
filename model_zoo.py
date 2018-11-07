@@ -97,7 +97,7 @@ class ModelFactory:
         x = base_model.output
         x = GlobalAveragePooling2D()(x)
         x = Dropout(0.5)(x) 
-        x = Dense(1024, activation="tanh")
+        x = Dense(1024, activation="tanh")(x)
         x = Dropout(0.25)(x) 
         predictions = Dense(class_num, activation="linear", name="predictions")(x)
         model = Model(inputs=img_input, outputs=predictions)
