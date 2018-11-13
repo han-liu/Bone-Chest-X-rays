@@ -8,6 +8,6 @@ import tool
 
 if __name__ == "__main__":
 
-    log_dir = "C:/Users/hliu/Desktop/DL/models/classification/run_1020_inceptionv3_patch"
+    log_dir = "C:/Users/hliu/Desktop/DL/models/classification/run1_InceptionV3"
     my_classifier = MyClassifier()
     my_classifier.train(log_dir)	
