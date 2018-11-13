@@ -26,18 +26,18 @@ class config(object):
                    "Pneumonia","Pneumothorax","Consolidation","Edema","Emphysema","Fibrosis",
                    "Pleural_Thickening","Hernia"]
 
-    MODEL_NAME = "DenseNet121"
-    EPOCH = 100
-    BATCH_SIZE = 32
-    NET_INPUT_DIM = 256
+    MODEL_NAME = "InceptionV3"
+    EPOCH = 200
+    BATCH_SIZE = 8
+    NET_INPUT_DIM = 512
     LEARNING_RATE = 1e-3
     
     LOSS = "binary_crossentropy"
     METRICS = ['acc']
     GENERATOR_WORKERS = 8
     
-    TRAIN_STEPS = 2364
-    VAL_STEPS = 339
+    TRAIN_STEPS = 9456
+    VAL_STEPS = 1356
 
     # Either (a) Directory of images (b) CSV filepath
     #########################################################
@@ -109,10 +109,11 @@ class MyClassifier(object):
         """ Training classification model
         """
         ###################################################################################
-        augs = augmentation() # how many augmentations will be used
-        optimizer = SGD(lr=config.LEARNING_RATE, momentum=0.9, decay=1e-5)
-        early_stop = EarlyStopping(monitor="val_loss", min_delta=0, patience=9, verbose=1)
-        reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.1, patience=3,verbose=1)
+        augs = augmentation()
+        optimizer = Adam(lr=config.LEARNING_RATE, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
+        early_stop = EarlyStopping(monitor="val_loss", min_delta=0, patience=20, verbose=1)
+        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.8, patience=10, verbose=1,
+                                      mode='auto', epsilon=0.0001, cooldown=5, min_lr=0.0001)
         ###################################################################################
 
         TRAIN_CSV_FP, tmp_train = tool.prepare_dataset(config.TRAIN)
