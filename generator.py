@@ -1,18 +1,27 @@
 import os
+import sys
 import random
 import numpy as np
 import pandas as pd
 from keras.utils import Sequence
 
-import sys
 sys.path.append("C:/Users/hliu/Desktop/DL/toolbox")
 import tool
 
 
+
 class AugmentedImageSequence(Sequence):
-    def __init__(self, csv_fp, class_names, batch_size,
-            target_size, steps, augmenter=None, 
-            shuffle_on_epoch_end=True, random_state=1):
+    def __init__(self, 
+                 csv_fp, 
+                 class_names, 
+                 batch_size,
+                 target_size, 
+                 steps, 
+                 additional_features=None,
+                 augmenter=None, 
+                 shuffle_on_epoch_end=True,
+                 random_state=1
+                 ):
 
             self.csv_fp = csv_fp
             self.batch_size = batch_size
@@ -22,6 +31,7 @@ class AugmentedImageSequence(Sequence):
             self.shuffle = shuffle_on_epoch_end
             self.random_state = random_state
             self.class_names = class_names
+            self.additional_features = additional_features
             self.prepare_dataset()
 
     def __bool__(self):
@@ -35,10 +45,15 @@ class AugmentedImageSequence(Sequence):
 
     def __getitem__(self, idx):
         batch_image_fps = self.image_fps[self.batch_size*idx : self.batch_size*(idx + 1)]
-        batch_label = self.labels[self.batch_size*idx : self.batch_size*(idx + 1)]
         batch_images = np.asarray([self.load_image(image_fp) for image_fp in batch_image_fps])
         batch_images = self.transform_batch_images(batch_images)
-        return batch_images, batch_label
+        batch_label = self.labels[self.batch_size*idx : self.batch_size*(idx + 1)]
+
+        if self.additional_features:
+            batch_add_features = self.add_features[self.batch_size*idx : self.batch_size*(idx + 1)]
+            return [batch_images, batch_add_features], batch_label
+        else:
+            return batch_images, batch_label
 
     def load_image(self, image_fp):
         image = tool.read_image(image_fp, 3)
@@ -60,6 +75,8 @@ class AugmentedImageSequence(Sequence):
         # The random seed will be different at each epoch
         df = pd.read_csv(self.csv_fp).sample(frac=1., random_state=self.random_state)
         self.image_fps, self.labels = df.iloc[:,0].as_matrix(), df[self.class_names].as_matrix()
+        if self.additional_features: 
+            self.add_features = df[self.additional_features].as_matrix()
 
     def on_epoch_end(self):
         if self.shuffle:
