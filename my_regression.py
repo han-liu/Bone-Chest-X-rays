@@ -24,17 +24,18 @@ class config(object):
     """ Regression model configuration """
 
     CLASS_NAMES = ["bone_age"]
+    ADD_FEATURES = None
     MODEL_NAME = "InceptionV3"
-    EPOCH = 100
-    BATCH_SIZE = 32
-    NET_INPUT_DIM = 299
+    EPOCH = 200
+    BATCH_SIZE = 16
+    NET_INPUT_DIM = 500
     LEARNING_RATE = 1e-3
     
-    LOSS = "mse"
-    METRICS = ["mae"]
+    LOSS = "mae"
+    METRICS = ["mae", "mse"]
     GENERATOR_WORKERS = 8
     
-    TRAIN_STEPS = 315
+    TRAIN_STEPS = 630
     VAL_STEPS = 78
 
     # Either (a) Directory of images (b) CSV filepath
@@ -46,19 +47,18 @@ class config(object):
 
 def augmentation():
     """ Real-time image augmentation """
-    return iaa.SomeOf((0, 5),
+    return iaa.Sequential(
                 [    
                 iaa.Fliplr(0.5),
-                iaa.Flipud(0.5),
-                iaa.Affine(scale={"x": (0.9, 1.1), "y": (0.9, 1.1)}, 
-                        translate_percent={"x": (-0.01, 0.01), "y": (-0.01, 0.01)}, 
-                        rotate=(-10, 10), 
-                        shear=(-10, 10)),
-                iaa.CropAndPad(percent=(-0.2,0.2)),
-                iaa.Add((-10, 10), per_channel=0.5),
-                iaa.ContrastNormalization((0.8,1.4),per_channel=0.5),
-                iaa.Sharpen(alpha=(0, 1.0), lightness=(0.85, 1.25)),
-                iaa.Multiply((0.9, 1.1), per_channel=0.5),
+                # iaa.Flipud(0.5),
+                iaa.Affine(scale={"x": (0.8, 1.2), "y": (0.8, 1.2)}, 
+                        translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)}, 
+                        rotate=(-20, 20),)
+                # iaa.CropAndPad(percent=(-0.2,0.2)),
+                # iaa.Add((-10, 10), per_channel=0.5),
+                # iaa.ContrastNormalization((0.8,1.4),per_channel=0.5),
+                # iaa.Sharpen(alpha=(0, 1.0), lightness=(0.85, 1.25)),
+                # iaa.Multiply((0.9, 1.1), per_channel=0.5),
                 ])
 
 
@@ -72,9 +72,10 @@ class MyRegression(object):
         """
         ###################################################################################
         augs = augmentation()
-        optimizer = Adam(lr=config.LEARNING_RATE, decay=1e-5)
-        early_stop = EarlyStopping(monitor="val_loss", min_delta=0, patience=9, verbose=1)
-        reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.1, patience=3,verbose=1)
+        optimizer = Adam(lr=config.LEARNING_RATE, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
+        early_stop = EarlyStopping(monitor="val_loss", min_delta=0, patience=20, verbose=1)
+        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.8, patience=10, verbose=1,
+                                      mode='auto', epsilon=0.0001, cooldown=5, min_lr=0.0001)
         ###################################################################################
 
         TRAIN_CSV_FP, tmp_train = tool.prepare_dataset(config.TRAIN)
@@ -93,6 +94,7 @@ class MyRegression(object):
             batch_size=config.BATCH_SIZE,
             target_size=(config.NET_INPUT_DIM, config.NET_INPUT_DIM),
             steps=config.TRAIN_STEPS,
+            additional_features=config.ADD_FEATURES,
             augmenter=augs,
             )
 
@@ -103,13 +105,14 @@ class MyRegression(object):
             batch_size=config.BATCH_SIZE,
             target_size=(config.NET_INPUT_DIM, config.NET_INPUT_DIM),
             steps=config.VAL_STEPS,
+            additional_features=config.ADD_FEATURES,
             shuffle_on_epoch_end=False,
             )
 
         # Load Regression model
         model = ModelFactory().get_regression_model(class_num=len(config.CLASS_NAMES),
                                                     model_name=config.MODEL_NAME,
-                                                    base_weights="imagenet",
+                                                    base_weights=None,
                                                     input_shape=(config.NET_INPUT_DIM,config.NET_INPUT_DIM,3))
         if show_model: print(model.summary())
 
