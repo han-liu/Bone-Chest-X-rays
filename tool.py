@@ -371,7 +371,7 @@ def prepare_dataset(split):
     if os.path.isdir(split):
         csv = prepare_csv(split)
         tmp_csv = True
-    if os.path.isfile(csv):
+    if os.path.isfile(split):
         csv = split
     return csv, tmp_csv
 
