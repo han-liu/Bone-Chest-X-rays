@@ -91,6 +91,7 @@ class ModelFactory:
         model = Model(inputs=base_model.input, outputs=predictions)
         return model
 
+
     def get_regression_model(self, class_num, model_name,
         base_weights="imagenet", input_shape=None):
         base_model = self.get_base_model(model_name, base_weights, input_shape)
@@ -102,6 +103,26 @@ class ModelFactory:
         predictions = Dense(class_num, activation="linear", name="predictions")(x)
         model = Model(inputs=base_model.input, outputs=predictions)
         return model
+
+
+    def boneage_winner(self, class_num, model_name,
+        base_weights="imagenet", input_shape=None):
+
+        base_model = self.get_base_model(model_name, base_weights, input_shape)
+        x = base_model.output
+        x = Flatten()(x)
+    
+        gender_input = Input(shape=(1,), name="gender_input")
+        y = Dense(32)(gender_input)
+
+        concat = concatenate([x, y], name='concatenation_layer')
+        z = Dense(1000, activation="relu")(concat)
+        z = Dense(1000, activation="relu")(z)
+        predictions = Dense(class_num, activation="linear", name="predictions")(z)
+
+        model = Model(inputs=[base_model.input, gender_input], outputs=predictions)
+        return model
+
 
 
 def LungSegNet(inp_shape, k_size=3):
