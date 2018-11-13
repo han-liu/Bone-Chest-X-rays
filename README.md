@@ -1,2 +1,2 @@
-# Keras-Classification
-Classification using Keras (customized sequence generator)
+# Keras
+Classification / Regression (customized sequence generator)
