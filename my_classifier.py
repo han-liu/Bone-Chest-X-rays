@@ -14,8 +14,6 @@ from sklearn.metrics import roc_auc_score
 
 from generator import AugmentedImageSequence
 from model_zoo import ModelFactory
-
-sys.path.append("C:/Users/hliu/Desktop/DL/toolbox")
 import tool
 
 
