@@ -34,8 +34,8 @@ class config(object):
     METRICS = ['acc']
     GENERATOR_WORKERS = 8
     
-    TRAIN_STEPS = 9456
-    VAL_STEPS = 1356
+    TRAIN_STEPS = 9457
+    VAL_STEPS = 1358
 
     # Either (a) Directory of images (b) CSV filepath
     #########################################################
