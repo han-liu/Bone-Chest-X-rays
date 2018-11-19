@@ -10,7 +10,6 @@ from keras.models import load_model
 from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau, EarlyStopping, CSVLogger
 from keras.callbacks import Callback
 from keras.optimizers import Adam, SGD
-from keras.metrics import mean_absolute_error
 from sklearn.metrics import roc_auc_score
 
 from generator import AugmentedImageSequence
