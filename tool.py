@@ -7,7 +7,7 @@ import glob
 import numpy as np
 import pandas as pd
 from skimage.transform import resize
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, mean_absolute_error
 
 ############################################################
 #  Utility
@@ -397,3 +397,25 @@ def compute_auroc(csv_gt, csv_pred, save_fp=None):
     if save_fp:
         f.write("-------------------------\n")
         f.write(f"mean auroc: {mean_auroc}")
+
+
+def compute_mae(csv_gt, csv_pred, save_fp=None):
+    df_gt   = pd.read_csv(csv_gt)
+    df_pred = pd.read_csv(csv_pred)
+    assert df_gt.columns.tolist()==df_pred.columns.tolist()
+    assert df_gt.iloc[:,0].tolist()==df_pred.iloc[:,0].tolist()
+    class_names = df_gt.columns.tolist()[1:]
+    y_gt = df_gt[class_names].as_matrix()
+    y_pred = df_pred[class_names].as_matrix()
+    if save_fp: f = open(save_fp, "w")
+    mae = []
+    for i in range(len(class_names)):
+        score = mean_absolute_error(y_gt[:, i], y_pred[:,i])
+        mae.append(score)
+        print(f"{class_names[i]},{score}")
+        if save_fp: f.write(f"{class_names[i]},{score}\n")
+    mean_mae = np.mean(mae)
+    print(f"mean mae: {mean_mae}")
+    if save_fp:
+        f.write("-------------------------\n")
+        f.write(f"mean mae: {mean_mae}")
