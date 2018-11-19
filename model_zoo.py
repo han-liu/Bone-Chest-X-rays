@@ -110,14 +110,17 @@ class ModelFactory:
 
         base_model = self.get_base_model(model_name, base_weights, input_shape)
         x = base_model.output
-        x = Flatten()(x)
-    
+        x = GlobalAveragePooling2D()(x)
+        x = Dropout(0.5)(x)
+
         gender_input = Input(shape=(1,), name="gender_input")
         y = Dense(32)(gender_input)
 
         concat = concatenate([x, y], name='concatenation_layer')
-        z = Dense(1000, activation="relu")(concat)
-        z = Dense(1000, activation="relu")(z)
+        z = Dense(1024, activation="relu")(concat)
+        z = Dropout(0.25)(z)
+        # z = Dense(500, activation="relu")(z)
+        # z = Dropout(0.1)(z)
         predictions = Dense(class_num, activation="linear", name="predictions")(z)
 
         model = Model(inputs=[base_model.input, gender_input], outputs=predictions)
