@@ -15,6 +15,8 @@ from sklearn.metrics import roc_auc_score
 
 from generator import AugmentedImageSequence
 from model_zoo import ModelFactory
+
+sys.path.append("C:/Users/hliu/Desktop/DL/toolbox")
 import tool
 
 
@@ -22,7 +24,7 @@ class config(object):
     """ Regression model configuration """
 
     CLASS_NAMES = ["bone_age"]
-    ADD_FEATURES = None
+    ADD_FEATURES = ["gender"]
     MODEL_NAME = "InceptionV3"
     EPOCH = 200
     BATCH_SIZE = 16
@@ -46,7 +48,7 @@ class config(object):
 def augmentation():
     """ Real-time image augmentation """
     return iaa.Sequential(
-                [    
+                [
                 iaa.Fliplr(0.5),
                 # iaa.Flipud(0.5),
                 iaa.Affine(scale={"x": (0.8, 1.2), "y": (0.8, 1.2)}, 
@@ -108,10 +110,11 @@ class MyRegression(object):
             )
 
         # Load Regression model
-        model = ModelFactory().get_regression_model(class_num=len(config.CLASS_NAMES),
+        model = ModelFactory().boneage_winner(class_num=len(config.CLASS_NAMES),
                                                     model_name=config.MODEL_NAME,
                                                     base_weights=None,
                                                     input_shape=(config.NET_INPUT_DIM,config.NET_INPUT_DIM,3))
+        
         if show_model: print(model.summary())
 
         model.compile(optimizer=optimizer, loss=config.LOSS, metrics=config.METRICS)
@@ -143,8 +146,9 @@ class MyRegression(object):
         print(f"successfully loaded model: {model_fp}")
 
 
-    def predict(self, image_fp):  
+    def predict(self, image_fp, add_features=None):  
         '''
+        add_features: list of additional features: [gender, age..]
         Returns:
         Predicted y.
         '''    
@@ -153,8 +157,10 @@ class MyRegression(object):
         image = tool.resize_image(image,(config.NET_INPUT_DIM,config.NET_INPUT_DIM))
         image = tool.normalize(image)
         batch = np.asarray([image])
-        y = np.squeeze(self.model.predict(batch),0).tolist()
-        return y
+        if add_features:
+            return np.squeeze(self.model.predict([batch]+add_features),0).tolist()
+        else:
+            return np.squeeze(self.model.predict(batch),0).tolist()
 
 
     def write_rsult(self, test_src, save_fp, threshold=0.5):
@@ -170,10 +176,14 @@ class MyRegression(object):
             df_test = pd.read_csv(test_src)
             pid_column_name = df_test.columns.tolist()[0]
             image_fps = df_test[pid_column_name].tolist()
+
+            # optional
+            genders = df_test["gender"].tolist()
+
         with open(save_fp, 'w') as f:
             f.write(row)
-            for image_fp in tqdm(image_fps):
-                y = self.predict(image_fp)
+            for idx, image_fp in enumerate(tqdm(image_fps)):
+                y = self.predict(image_fp, [np.asarray([genders[idx]])])
                 target = [round(x, 3) for x in y]
                 target_str = ",".join(str(x) for x in target)
                 f.write(image_fp+","+target_str+"\n")
